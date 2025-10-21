@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zara AI Companion</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <div class="chat-container">
+        
+       <div class="avatar-container">
+        <img src="{{ url_for('static', filename='avatar.png.png') }}" alt="Zara AI Avatar"> 
+    </div>
+        
+        <div class="status-message" id="statusMessage">
+            Press the button and start speaking.
+        </div>
+        
+        <button class="talk-button" id="talkButton">
+            </button>
+        
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+</body>
+</html>
