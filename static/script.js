@@ -88,7 +88,7 @@ document.addEventListener("DOMContentLoaded", () => {
         avatarContainer.classList.remove("listening");
         
         try {
-            const response = await fetch("https://127.0.0.1:5000/chat", { // Ensure HTTPS
+            const response = await fetch("/chat", { // Ensure HTTPS
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
