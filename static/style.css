@@ -1,143 +1,127 @@
 /* Basic page setup */
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background-color: #f4f4f9;
-    color: #333;
+    background-color: #0c0c1a; /* Dark blue */
+    color: #e0e0e0;
     display: flex;
     justify-content: center;
     align-items: center;
     height: 100vh;
     margin: 0;
+    overflow: hidden;
+    position: relative;
 }
 
-/* The main container for our app */
+/* Chat Container - Invisible Layout Frame */
 .chat-container {
-    width: 350px;
-    height: 600px;
-    background-color: #ffffff;
-    border-radius: 24px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
     align-items: center;
-    padding: 40px 30px;
+    justify-content: center; /* Center content vertically */
+    width: 95%;
+    height: 98%; /* Use almost full height */
+    max-width: 700px; /* Allow wider on large screens */
+    position: relative;
     box-sizing: border-box;
+    padding: 5px; /* Minimal padding */
 }
 
-/* The circle for our avatar */
+/* Avatar Container - Larger, Clickable Area */
 .avatar-container {
-    width: 150px;
-    height: 150px;
-    background-color: #e0e7ff; /* A soft, gentle blue */
-    border-radius: 50%;
-    margin-top: 20px;
-    border: 6px solid #ffffff;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
-
-/* The text that says "Listening..." etc. */
-.status-message {
-    font-size: 16px;
-    color: #555;
-    text-align: center;
-    height: 40px; /* Gives it a fixed height so it doesn't jump */
-    line-height: 1.5;
-}
-
-/* The main microphone button */
-.talk-button {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    border: none;
-    cursor: pointer;
-    background-color: #4A90E2; /* A nice blue */
-    box-shadow: 0 4px 15px rgba(74, 144, 226, 0.4);
+    /* Significantly larger size using viewport units */
+    width: clamp(320px, 75vw, 550px); /* Responsive: min 320, 75% width, max 550 */
+    height: auto;
+    aspect-ratio: 1 / 1.1; /* Maintain aspect ratio */
+    position: relative;
     display: flex;
     justify-content: center;
     align-items: center;
-    transition: all 0.2s ease-in-out;
+    overflow: hidden;
+    cursor: pointer;
+    margin-bottom: 5px; /* Reduce space between avatar and text */
+    flex-grow: 1; /* Allow container to take up available space */
+    max-height: 80vh; /* Limit height to 80% of viewport */
+
+
+    /* Float Animation */
+    animation: float 7s ease-in-out infinite;
+
+    /* Fading Mask - starts higher up */
+    -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 95%);
+    mask-image: linear-gradient(to bottom, black 70%, transparent 95%);
 }
 
-/* SVG icon for the microphone */
-.talk-button::before {
-    content: '';
-    width: 32px;
-    height: 32px;
-    background-color: white;
-    mask-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14q-1.25 0-2.125-.875T9 11V5q0-1.25.875-2.125T12 2q1.25 0 2.125.875T15 5v6q0 1.25-.875 2.125T12 14Zm-1 7v-3.075q-2.6-.3-4.3-2.325T5 11h2q0 2.075 1.463 3.538T12 16q2.075 0 3.538-1.463T17 11h2q0 2.6-1.7 4.625T13 17.925V21h-2Z"/></svg>');
-    mask-size: cover;
-}
-
-/* Make the button "pulse" when you hover */
-.talk-button:hover {
-    transform: scale(1.05);
-    box-shadow: 0 8px 20px rgba(74, 144, 226, 0.5);
-}
-
-/* A special style for when we are "listening" */
-.talk-button.listening {
-    background-color: #d9534f; /* Red for recording */
-    box-shadow: 0 0 20px 10px rgba(217, 83, 79, 0.4);
-    animation: pulse 1.2s infinite ease-in-out;
-}
-
-@keyframes pulse {
-    0% {
-        transform: scale(1);
-    }
-    50% {
-        transform: scale(1.1);
-    }
-    100% {
-        transform: scale(1);
-    }
-}
-/* Style the avatar image itself */
+/* Avatar Image - Floating Hologram */
 .avatar-container img {
-    width: 100%; /* Make image fill the container width */
-    height: 100%; /* Make image fill the container height */
-    object-fit: cover; /* Crop image nicely to fit the circle */
-    border-radius: 50%; /* Ensure the image corners are rounded */
-}
-/* --- Avatar Animation States --- */
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    height: auto;
+    width: auto;
+    object-fit: contain;
 
-/* Default/Idle state - subtle breathing */
-.avatar-container {
-    /* Add transition for smooth changes */
-    transition: transform 0.3s ease-out, box-shadow 0.3s ease-out;
-    /* (Keep existing styles like width, height, background, etc.) */
-}
+    /* Hologram Effect */
+    opacity: 0.8;
+    filter: drop-shadow(0 0 25px rgba(130, 190, 255, 0.7)) /* More diffuse blue glow */
+            drop-shadow(0 0 10px rgba(180, 220, 255, 0.6)); /* Softer inner glow */
 
-/* You could add a subtle breathing animation here if you like,
-   but let's keep it simple for now and just use transitions */
+    transition: filter 0.6s ease-out, opacity 0.6s ease-out;
 
-/* Listening state - red glow/pulse */
-.avatar-container.listening {
-    box-shadow: 0 0 25px 12px rgba(217, 83, 79, 0.5); /* Red glow */
-    transform: scale(1.03); /* Slightly larger */
+    /* Blink Animation */
+    animation: blink-image 6s infinite ease-in-out 1s;
 }
 
-/* Speaking state - blue glow/pulse */
-.avatar-container.speaking {
-    box-shadow: 0 0 25px 12px rgba(74, 144, 226, 0.5); /* Blue glow */
-    transform: scale(1.03); /* Slightly larger */
+/* Status Text - Positioned Below Avatar */
+.status-message {
+    font-size: clamp(18px, 3vw, 20px); /* Responsive font size */
+    color: #b0d0ff;
+    text-align: center;
+    height: auto;
+    line-height: 1.4;
+    text-shadow: 0 0 8px rgba(130, 190, 255, 0.6);
+    padding: 5px 15px; /* Add padding */
+    position: relative;
+    z-index: 2;
+    margin-top: 0; /* Let flexbox handle spacing */
+    margin-bottom: 15px; /* Space before potential (removed) button area */
+    flex-shrink: 0; /* Prevent text from shrinking */
 }
 
-/* Optional: Style for the talk button when listening */
-/* (We already have this, but make sure it's there) */
-.talk-button.listening {
-    background-color: #d9534f; /* Red for recording */
-    box-shadow: 0 0 20px 10px rgba(217, 83, 79, 0.4);
-    /* Keep the pulse animation if you like it, or remove for just color change */
-    animation: pulse 1.2s infinite ease-in-out; 
+
+/* --- Keyframes (Float, Blink) --- */
+
+@keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-15px); } /* Keep float */
+    100% { transform: translateY(0px); }
 }
 
-/* Optional: A keyframe animation if you wanted pulsing instead of just glow */
-/* @keyframes pulse-glow {
-    0% { box-shadow: 0 0 15px 8px rgba(74, 144, 226, 0.4); }
-    50% { box-shadow: 0 0 25px 12px rgba(74, 144, 226, 0.6); }
-    100% { box-shadow: 0 0 15px 8px rgba(74, 144, 226, 0.4); }
-} */
-/* If you use keyframes, add 'animation: pulse-glow 1.5s infinite;' to the .speaking class */
+@keyframes blink-image {
+    0%, 93%, 100% { opacity: 0.8; }
+    94%, 98% { opacity: 0.4; }
+}
+
+
+/* --- Avatar States (Glowing based on image filter) --- */
+
+.avatar-container.listening img {
+    filter: drop-shadow(0 0 35px rgba(255, 100, 100, 0.9)) /* Wider Red glow */
+            drop-shadow(0 0 15px rgba(255, 130, 130, 0.8)); /* Softer inner red glow */
+    opacity: 0.95;
+    /* Remove separate pulse animation for simplicity, rely on glow change */
+    animation: blink-image 6s infinite ease-in-out 1s; /* Keep blink */
+
+}
+
+.avatar-container.speaking img {
+    filter: drop-shadow(0 0 45px rgba(130, 190, 255, 1.0)) /* Wider, Brighter blue glow */
+            drop-shadow(0 0 20px rgba(180, 220, 255, 0.9)); /* Brighter inner blue glow */
+    opacity: 1.0;
+     /* Remove separate pulse animation for simplicity, rely on glow change */
+     animation: blink-image 6s infinite ease-in-out 1s; /* Keep blink */
+}
+
+/* Removed pulse-glow keyframes */

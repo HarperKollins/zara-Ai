@@ -10,18 +10,14 @@
 
     <div class="chat-container">
         
-       <div class="avatar-container">
-        <img src="{{ url_for('static', filename='avatar.png.png') }}" alt="Zara AI Avatar"> 
-    </div>
+       <div class="avatar-container" id="avatarInteractArea"> 
+            <img src="{{ url_for('static', filename='avatar.png.png') }}" alt="Zara AI Avatar"> 
+       </div>
         
         <div class="status-message" id="statusMessage">
-            Press the button and start speaking.
+            Tap Zara to start speaking. </div>
+        
         </div>
-        
-        <button class="talk-button" id="talkButton">
-            </button>
-        
-    </div>
 
     <script src="{{ url_for('static', filename='script.js') }}" defer></script>
 </body>
