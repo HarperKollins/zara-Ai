@@ -1,396 +1,290 @@
+// Wrap everything
 document.addEventListener("DOMContentLoaded", () => {
-    
-    // --- Get HTML elements ---
-    // const talkButton = document.getElementById("talkButton"); // REMOVED
-    const avatarInteractArea = document.getElementById("avatarInteractArea"); // NEW: Get the avatar container
-    const statusMessage = document.getElementById("statusMessage"); 
-    const avatarContainer = document.querySelector(".avatar-container"); 
+    console.log(">>> SCRIPT START (Browser Speech + Vision - Full)");
 
-    // --- Speech Recognition (Input) ---
-    // ... (rest of SpeechRecognition setup remains the same) ...
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition; 
+    // --- 1. Get references ---
+    const talkButton = document.getElementById("talkButton");
+    const cameraButton = document.getElementById("cameraButton");
+    const statusMessage = document.getElementById("statusMessage");
+    const avatarContainer = document.getElementById("avatarContainer");
+    const avatarImage = document.getElementById("avatarImage");
+    const videoElement = document.querySelector('.input_video');
+    console.log(">>> Got element references");
+
+    // --- Check elements ---
+    if (!talkButton || !cameraButton || !statusMessage || !avatarContainer || !videoElement) {
+        console.error(">>> CRITICAL ERROR: Essential elements missing!");
+        if(statusMessage) statusMessage.textContent = "Error: UI component missing.";
+        return; // Stop script execution if critical elements are missing
+    }
+
+    // --- 2. Speech Recognition (Input) ---
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition;
     if (!SpeechRecognition) {
+        console.error(">>> Speech Recognition not supported.");
         statusMessage.textContent = "Browser doesn't support speech recognition.";
-        // talkButton.disabled = true; // REMOVED
-        avatarInteractArea.style.cursor = 'not-allowed'; // Indicate disabled state
+        talkButton.disabled = true;
+        cameraButton.disabled = true;
         return;
     }
-    recognition = new SpeechRecognition();
-    recognition.lang = 'en-US';
-    recognition.interimResults = false;
-    recognition.continuous = false;
-
-
-    // --- Audio Playback (Output) using Media Source Extensions ---
-    // ... (rest of MediaSource setup remains the same) ...
-    let mediaSource = new MediaSource();
-    let audio = new Audio();
-    // audio.src = URL.createObjectURL(mediaSource); // Set later in setupMediaSource
-    let sourceBuffer;
-    let audioQueue = [];
-    let isPlaying = false;
-    let isAppending = false; 
-    let streamEnded = false;
-    let currentFetchAbortController = null; 
-
-    // Initialize MediaSource setup
-    if (!setupMediaSource()) {
-        console.error("Initial MediaSource setup failed.");
-        // Optionally disable interaction area
-        avatarInteractArea.style.cursor = 'not-allowed';
+    try {
+        recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
+        recognition.interimResults = false;
+        recognition.continuous = false;
+        console.log(">>> Speech Recognition initialized.");
+    } catch (e) {
+        console.error(">>> Error initializing Speech Recognition:", e);
+        statusMessage.textContent = "Error initializing speech recognition.";
+        talkButton.disabled = true;
+        cameraButton.disabled = true;
+        return;
     }
 
+    // --- 3. Speech Synthesis (Output - Browser Built-in) ---
+    const synth = window.speechSynthesis;
+    let voices = [];
+    let selectedVoice = null;
+    let utterance = null;
+    let isSpeaking = false; // Flag for browser speech
 
-    function setupMediaSource() {
-        // Clear previous state if necessary
-        if (audio.src) {
-            URL.revokeObjectURL(audio.src);
-            audio.removeAttribute('src');
+    function loadVoices() {
+      voices = synth.getVoices();
+      if (voices.length > 0) {
+          console.log("Available Voices:", voices.map(v => `${v.name} (${v.lang})`));
+          selectedVoice = voices.find(voice =>
+                voice.lang.startsWith('en') &&
+                (voice.name.includes('Female') || voice.name.includes('Woman') || voice.name.includes('Zira') || voice.name.includes('Samantha') || voice.default)
+            );
+          if (selectedVoice) { console.log("Selected default voice:", selectedVoice.name); }
+          else { console.warn("Could not find a preferred female English voice."); }
+      } else { console.warn("Browser voices not loaded yet."); }
+    }
+    loadVoices();
+    if (synth.onvoiceschanged !== undefined) { synth.onvoiceschanged = loadVoices; }
+
+    // --- 4. MediaPipe Setup (Vision) ---
+    let faceMesh; let hands; let camera; let visionActive = false;
+    let currentVisualContext = { isSmiling: false, fingersUp: 0 }; // Store visual state
+
+    // --- onFaceResults (Handles Face Mesh Data) ---
+    function onFaceResults(results) {
+        let smilingDetected = false;
+        if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+            const landmarks = results.multiFaceLandmarks[0];
+            const upperLipCenter = landmarks[13]; const lowerLipCenter = landmarks[14];
+            const leftCorner = landmarks[61]; const rightCorner = landmarks[291];
+            if (upperLipCenter && lowerLipCenter && leftCorner && rightCorner) {
+                 const mouthWidth = Math.hypot(leftCorner.x - rightCorner.x, leftCorner.y - rightCorner.y);
+                 const mouthHeight = Math.hypot(upperLipCenter.x - lowerLipCenter.x, upperLipCenter.y - lowerLipCenter.y);
+                 const smileRatio = mouthWidth / mouthHeight;
+                 if (smileRatio > 4.5) { smilingDetected = true; }
+            }
         }
-        if (mediaSource && mediaSource.readyState !== 'closed') {
-           // Attempt clean close if possible, might need more robust handling
-           try { 
-               if(sourceBuffer && sourceBuffer.updating) sourceBuffer.abort();
-               //if (mediaSource.readyState === 'open') mediaSource.endOfStream(); // Might cause issues if called incorrectly
-           } catch (e) { console.warn("Error during MediaSource reset:", e); }
+        if (currentVisualContext.isSmiling !== smilingDetected) {
+            console.log("Smile state changed:", smilingDetected);
+            currentVisualContext.isSmiling = smilingDetected;
+            // TODO: Add visual feedback for smile if desired
+            // if (smilingDetected) avatarContainer.classList.add("smiling"); else avatarContainer.classList.remove("smiling");
         }
-
-
-        if (!window.MediaSource) {
-            console.error("MediaSource API not supported!");
-            statusMessage.textContent = "Browser cannot play streamed audio.";
-            return false;
-        }
-        mediaSource = new MediaSource();
-        const audioURL = URL.createObjectURL(mediaSource);
-        audio = new Audio(); // Recreate audio element
-        audio.src = audioURL;
-        audioQueue = [];
-        isPlaying = false;
-        isAppending = false;
-        streamEnded = false;
-
-        // Clear old listeners before adding new ones
-        mediaSource.removeEventListener('sourceopen', handleSourceOpen);
-        audio.removeEventListener('play', handleAudioPlay); // Use 'play' event
-        audio.removeEventListener('ended', handleAudioEnded);
-        audio.removeEventListener('error', handleAudioError);
-        
-        // Add new listeners
-        mediaSource.addEventListener('sourceopen', handleSourceOpen);
-        audio.addEventListener('play', handleAudioPlay); // Use 'play' event
-        audio.addEventListener('ended', handleAudioEnded);
-        audio.addEventListener('error', handleAudioError);
-        console.log("MediaSource setup complete, waiting for sourceopen...");
-        return true;
     }
 
+    // --- onHandResults (Handles Hand Tracking Data) ---
+    function onHandResults(results) {
+        let currentFingers = 0;
+        if (results.multiHandLandmarks && results.multiHandedness) {
+            if (results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0]; // Process first hand
+                const tipIds = [4, 8, 12, 16, 20];
+                let fingersUpCount = 0;
+                 if (landmarks[tipIds[0]].y < landmarks[tipIds[0] - 2].y) { fingersUpCount++; } // Basic Thumb check
+                 for (let j = 1; j < 5; j++) { if (landmarks[tipIds[j]].y < landmarks[tipIds[j] - 2].y) { fingersUpCount++; } }
+                 currentFingers = fingersUpCount;
+            }
+        }
+        if (currentVisualContext.fingersUp !== currentFingers) {
+             console.log("Fingers up changed:", currentFingers);
+             currentVisualContext.fingersUp = currentFingers;
+        }
+    }
 
-    function handleSourceOpen() {
-        console.log("MediaSource opened");
-        if (!mediaSource || mediaSource.readyState !== 'open') {
-             console.warn("SourceOpen called but MediaSource not ready or already closed.");
-             return; 
-        } 
-        // Ensure previous source buffer is removed if exists
-        // This is complex, might need more robust handling if re-setup is frequent
-         if (sourceBuffer) {
-              try {
-                   if (sourceBuffer.updating) sourceBuffer.abort();
-                   // mediaSource.removeSourceBuffer(sourceBuffer); // Can be problematic
-              } catch(e){ console.warn("Error removing old source buffer:", e); }
-              sourceBuffer = null; // Clear reference
-         }
+    // --- initializeVision (Sets up and starts camera/MediaPipe) ---
+    function initializeVision() {
+        console.log(">>> initializeVision() called.");
+        if (visionActive) { console.log("Vision already active."); return; }
 
+        statusMessage.textContent = "Initializing camera...";
+        cameraButton.disabled = true; cameraButton.textContent = "Starting...";
 
         try {
-            const mimeCodec = 'audio/mpeg'; 
-            if (MediaSource.isTypeSupported(mimeCodec)) {
-                 sourceBuffer = mediaSource.addSourceBuffer(mimeCodec);
-                 sourceBuffer.mode = 'sequence'; 
-                 // Clear old listeners first
-                 sourceBuffer.removeEventListener('updateend', handleBufferUpdateEnd);
-                 sourceBuffer.removeEventListener('error', handleSourceBufferError);
-                 // Add new listeners
-                 sourceBuffer.addEventListener('updateend', handleBufferUpdateEnd);
-                 sourceBuffer.addEventListener('error', handleSourceBufferError);
-
-                 console.log("SourceBuffer created");
-                 processQueue();
-            } else {
-                 console.error("MIME type not supported:", mimeCodec);
-                 statusMessage.textContent = "Audio format not supported.";
+            // Check if MediaPipe objects exist
+            if (typeof FaceMesh === "undefined" || typeof Hands === "undefined" || typeof Camera === "undefined") {
+                 console.error("MediaPipe libraries not loaded!");
+                 throw new Error("MediaPipe libraries not loaded.");
             }
 
-        } catch (e) {
-            console.error("Error adding SourceBuffer:", e);
-            statusMessage.textContent = "Error setting up audio player.";
+            faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
+            faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+            faceMesh.onResults(onFaceResults);
+            console.log(">>> FaceMesh configured.");
+
+            hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+            hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+            hands.onResults(onHandResults);
+            console.log(">>> Hands configured.");
+
+            if (!videoElement) { throw new Error("Video element missing"); }
+            camera = new Camera(videoElement, {
+                onFrame: async () => {
+                     if (!visionActive || !faceMesh || !hands || !videoElement) return;
+                     // Ensure video is playing and has data
+                     if (videoElement.paused || videoElement.ended || videoElement.readyState < 2) return;
+                     try {
+                         await faceMesh.send({image: videoElement});
+                         await hands.send({image: videoElement});
+                     } catch (error) { console.error("Error processing MediaPipe frame:", error); }
+                 }, width: 640, height: 360
+            });
+            console.log(">>> Camera configured.");
+
+            // Use navigator.mediaDevices directly for permissions check
+            navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+                .then((stream) => {
+                    console.log(">>> Camera permission granted.");
+                    videoElement.srcObject = stream; // Assign stream to video element
+                    videoElement.play(); // Start playing the video element (needed for Camera util)
+
+                    // Now start the MediaPipe camera utility
+                    camera.start()
+                        .then(() => {
+                            console.log(">>> MediaPipe Camera started successfully.");
+                            visionActive = true;
+                            statusMessage.textContent = "Tap Mic to start speaking.";
+                            talkButton.disabled = false; // <<< ENABLE MIC
+                            cameraButton.textContent = "Vision Active";
+                            cameraButton.classList.add("active");
+                            cameraButton.disabled = false;
+                        })
+                        .catch(camUtilError => { // Catch errors from camera.start()
+                             console.error(">>> MediaPipe Camera util start failed:", camUtilError);
+                             statusMessage.textContent = "Error starting vision processing.";
+                             visionActive = false; cameraButton.textContent = "Activate Vision"; cameraButton.disabled = false; talkButton.disabled = true;
+                             stream.getTracks().forEach(track => track.stop()); // Stop the stream if util fails
+                        });
+                })
+                .catch(err => { // Catch errors from getUserMedia (permissions etc.)
+                    console.error(">>> getUserMedia failed:", err);
+                    statusMessage.textContent = "Could not access camera. Check permissions.";
+                    visionActive = false; cameraButton.textContent = "Activate Vision"; cameraButton.disabled = false; talkButton.disabled = true;
+                });
+
+        } catch(error) {
+             console.error(">>> Error during Vision setup:", error);
+             statusMessage.textContent = "Error setting up vision components.";
+             cameraButton.textContent = "Activate Vision"; cameraButton.disabled = false; talkButton.disabled = true;
         }
     }
-     function handleSourceBufferError(e){
-         console.error("SourceBuffer error:", e);
-         // Attempt recovery or notify user
-         statusMessage.textContent = "Audio playback component error.";
-         // Reset state carefully
-         handleAudioError(new Error("SourceBuffer error")); // Trigger general audio error handling
-     }
+    // --- End MediaPipe Setup ---
 
 
-     function handleBufferUpdateEnd() {
-        isAppending = false;
-        // Check if stream ended *while* we were appending the last chunk
-        if (streamEnded && audioQueue.length === 0 && mediaSource && mediaSource.readyState === 'open' && sourceBuffer && !sourceBuffer.updating) {
-             try {
-                console.log("Ending MediaSource stream (updateend)");
-                mediaSource.endOfStream();
-             } catch(e){
-                console.warn("Error ending stream on updateend:", e);
-             }
-        } else {
-            // Continue processing queue
-            processQueue();
-        }
-    }
+    // --- 5. Event Handlers ---
 
-
-    function processQueue() {
-        if (sourceBuffer && !isAppending && !sourceBuffer.updating && audioQueue.length > 0) {
-            isAppending = true;
-            try {
-                const chunk = audioQueue.shift();
-                console.log("Appending buffer, size:", chunk.byteLength);
-                sourceBuffer.appendBuffer(chunk);
-                 // Start playing only if we have enough data and aren't already playing
-                 // Check readyState >= 1 (HAVE_METADATA) to avoid errors before metadata loaded
-                if (!isPlaying && audio.readyState >= 1 && !audio.paused) {
-                      console.log("Audio seems ready but play wasn't called or failed, retrying play...");
-                       audio.play().then(() => {
-                            console.log("Playback started on queue processing.");
-                       }).catch(e => {
-                            console.error("Retry play() failed:", e);
-                            handleAudioError(e);
-                       });
-                } else if (!isPlaying && audio.readyState >= 1 && audio.paused) {
-                     console.log("Attempting to play from processQueue (audio was paused)...");
-                     audio.play().then(() => {
-                            console.log("Playback started.");
-                            // isPlaying = true; // Set in onplay handler
-                       }).catch(e => {
-                            console.error("Audio play() failed:", e);
-                            handleAudioError(e); // Treat play error as a general audio error
-                       });
-                }
-
-
-            } catch (e) {
-                console.error("Error appending buffer:", e);
-                isAppending = false;
-                 // Handle specific errors like QuotaExceededError if needed
-                 if (e.name === 'QuotaExceededError') {
-                     console.warn("Buffer quota exceeded. Stream might be too fast or buffer too small.");
-                     // Simple recovery: clear queue and hope it catches up. More advanced: buffer management.
-                     audioQueue = []; 
-                 } else {
-                     handleAudioError(new Error("Error appending buffer"));
-                 }
-            }
-        } 
-        // If the queue is empty AND the fetch stream has ended, try ending the MediaSource stream
-        else if (streamEnded && audioQueue.length === 0 && mediaSource && mediaSource.readyState === 'open' && sourceBuffer && !sourceBuffer.updating && !isAppending) {
-             try {
-                  console.log("Ending MediaSource stream (processQueue - empty queue, stream ended)");
-                  mediaSource.endOfStream();
-             } catch(e){
-                  console.warn("Error ending stream on processQueue (empty):", e);
-             }
-        }
-    }
-
-
-    function handleAudioPlay() {
-        console.log("Audio onplay event fired");
-        isPlaying = true; // Crucial: Set playing flag HERE
-        avatarContainer.classList.add("speaking"); 
-        statusMessage.textContent = "Zara is speaking..."; 
-    }
-
-    function handleAudioEnded() {
-        console.log("Audio onended event fired");
-        isPlaying = false;
-        streamEnded = false; // Reset stream ended flag for next interaction
-        avatarContainer.classList.remove("speaking"); 
-        statusMessage.textContent = "Tap Zara to start speaking."; // Updated text
-        
-        // Clean up MediaSource URL - important for memory management
-        if (audio.src && audio.src.startsWith('blob:')) {
-            URL.revokeObjectURL(audio.src);
-            audio.removeAttribute('src'); 
-            console.log("Revoked audio object URL");
-        }
-         // Don't reset MediaSource here; setupMediaSource will handle it
-    }
-     function handleAudioError(e) {
-        console.error("Audio playback error event:", e); // Log the actual event/error object
-        const errorMessage = e && e.message ? e.message : "Unknown audio error";
-        statusMessage.textContent = `Error playing audio: ${errorMessage}`; 
-        
-        isPlaying = false;
-        streamEnded = true; // Assume stream is unusable on error
-        audioQueue = []; // Clear queue immediately
-        avatarContainer.classList.remove("speaking"); 
-
-        // Attempt to abort the ongoing fetch if there is one
-        if (currentFetchAbortController) {
-             console.log("Aborting fetch due to audio error.");
-             currentFetchAbortController.abort();
-             currentFetchAbortController = null;
-        }
-
-        // Clean up MediaSource URL
-         if (audio.src && audio.src.startsWith('blob:')) {
-             URL.revokeObjectURL(audio.src);
-             audio.removeAttribute('src');
-             console.log("Revoked audio object URL on error");
-         }
-        // Attempt to close MediaSource gracefully if possible
-         if (mediaSource && mediaSource.readyState === 'open') {
-             try {
-                if(sourceBuffer && sourceBuffer.updating) sourceBuffer.abort();
-                // Check if endOfStream can be called or if it throws error
-                // if (!sourceBuffer || !sourceBuffer.updating) mediaSource.endOfStream(); 
-             } catch(err){ console.warn("Error during error cleanup of MediaSource:", err); }
-         }
-         // Force readyState to closed if possible? Generally not directly possible.
-         // Rely on setupMediaSource to create a fresh one next time.
-    }
-
-
-    // --- Recognition Event Handlers ---
+    // Speech Recognition Handlers
     recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript; 
-        statusMessage.textContent = `You said: "${transcript}"`; 
-        sendToBackend(transcript);
-    }; 
+        console.log(">>> recognition.onresult FIRED.");
+        if (event.results && event.results.length > 0 && event.results[0].length > 0 && event.results[0][0].transcript) {
+            const transcript = event.results[0][0].transcript;
+            console.log(">>> Transcript received:", transcript);
+            if (statusMessage) statusMessage.textContent = `You said: "${transcript}"`;
+            console.log(">>> Attempting to call sendToBackend...");
+            sendToBackend(transcript, currentVisualContext); // Pass context
+            console.log(">>> Successfully CALLED sendToBackend.");
+        } else { console.warn(">>> recognition.onresult: no valid transcript found:", event); }
+    };
+    recognition.onerror = (event) => { console.error("Speech recognition error:", event.error); statusMessage.textContent = `Mic Error: ${event.error}`; talkButton.classList.remove("listening"); avatarContainer.classList.remove("listening"); };
+    recognition.onend = () => { console.log("Recognition ended."); if (!isSpeaking) { statusMessage.textContent = "Tap Mic to start speaking."; } talkButton.classList.remove("listening"); avatarContainer.classList.remove("listening"); };
 
-    recognition.onerror = (event) => {
-        console.error("Speech recognition error:", event.error); 
-        statusMessage.textContent = "I didn't quite catch that. Try again."; 
-        // talkButton.classList.remove("listening"); // REMOVED
-        avatarContainer.classList.remove("listening"); 
-    }; 
+    // Speech Synthesis (Browser) Handlers & Functions
+    function speak(text) { if (synth.speaking) { console.warn("Synth speaking, cancelling."); synth.cancel(); setTimeout(() => { startSpeaking(text); }, 100); } else { startSpeaking(text); } }
+    function startSpeaking(text){
+        if(!text) { console.error("speak function called with empty text."); return; }
+        utterance = new SpeechSynthesisUtterance(text);
+        if (selectedVoice) { utterance.voice = selectedVoice; } else { loadVoices(); if (selectedVoice) utterance.voice = selectedVoice; else console.log("Speaking with browser default."); }
+        utterance.onstart = () => { console.log("SpeechSynthesis started."); isSpeaking = true; avatarContainer.classList.remove("listening"); avatarContainer.classList.add("speaking"); statusMessage.textContent = "Zara is speaking..."; };
+        utterance.onend = () => { console.log("SpeechSynthesis ended."); isSpeaking = false; avatarContainer.classList.remove("speaking"); if (!talkButton.classList.contains("listening")) { statusMessage.textContent = "Tap Mic to start speaking."; } utterance = null; };
+        utterance.onerror = (e) => { console.error("SpeechSynthesis error:", e); isSpeaking = false; avatarContainer.classList.remove("speaking"); statusMessage.textContent = "Error making me speak."; utterance = null; };
+        synth.speak(utterance);
+    }
 
-    recognition.onend = () => {
-        // talkButton.classList.remove("listening"); // REMOVED
-        avatarContainer.classList.remove("listening"); 
-    }; 
 
-    // --- Avatar Click Logic --- NEW ---
-    avatarInteractArea.addEventListener("click", () => {
-        if (!recognition) return; // Exit if recognition isn't supported
-
-        if (isPlaying) {
-            console.log("Avatar clicked: Stopping audio");
-            if(audio) audio.pause(); 
-            handleAudioEnded(); // Manually call ended to reset state
-            if (currentFetchAbortController) { 
-                currentFetchAbortController.abort();
-                currentFetchAbortController = null;
+    // --- 6. BUTTON Click Listeners ---
+    if (cameraButton) {
+        cameraButton.addEventListener("click", () => {
+            console.log(">>> Camera button clicked.");
+            if (!visionActive) {
+                initializeVision(); // Call the function to start camera and MediaPipe
+            } else {
+                console.log("Vision is already active.");
+                // Optional: Implement stopVision() if needed
             }
-            return;
-        }
+        });
+        console.log(">>> Camera button listener attached.");
+    } else { console.error(">>> Camera button element not found!"); }
 
-        if (avatarContainer.classList.contains("listening")) { 
-            console.log("Avatar clicked: Stopping listening");
-            recognition.stop(); 
-            return;
-        }
+    if (talkButton) {
+        talkButton.addEventListener("click", () => {
+            console.log(">>> Talk button clicked. State:", { isDisabled: talkButton.disabled, isSynthSpeaking: synth.speaking, isListening: talkButton.classList.contains("listening") });
+            if (talkButton.disabled) { console.log("Talk button disabled."); return; }
+            if (!recognition) { console.error("Recognition not ready!"); return; }
 
-        console.log("Avatar clicked: Starting listening");
-        try {
-            recognition.start(); 
-            // talkButton.classList.add("listening"); // REMOVED
-            avatarContainer.classList.add("listening"); 
-            avatarContainer.classList.remove("speaking"); 
-            statusMessage.textContent = "Listening..."; 
-        } catch (error) {
-            console.error("Error starting recognition:", error); 
-            statusMessage.textContent = "Error starting. Please try again."; 
-            // talkButton.classList.remove("listening"); // REMOVED
-            avatarContainer.classList.remove("listening"); 
-        }
-    }); 
+            // Stop synth speech if speaking
+            if (synth.speaking) { console.log("Talk Button: Stopping SpeechSynthesis"); synth.cancel(); isSpeaking = false; avatarContainer.classList.remove("speaking"); statusMessage.textContent = "Tap Mic to start speaking."; return; }
 
-    // --- Fetch and Stream Audio ---
-    async function sendToBackend(message) {
-        console.log("Sending to backend:", message);
-        statusMessage.textContent = "Thinking..."; 
-        // talkButton.classList.remove("listening"); // REMOVED
-        avatarContainer.classList.remove("listening"); 
+            // Stop listening if listening
+            if (talkButton.classList.contains("listening")) { console.log("Talk Button: Stopping listening"); recognition.stop(); return; }
 
-        // Reset audio state and setup MediaSource for the new stream
-        if (!setupMediaSource()) {
-             statusMessage.textContent = "Cannot initialize audio player.";
-             return; // Stop if MediaSource setup failed
-        }
-        
+            // Start listening
+            console.log("Talk Button: Attempting to start recognition...");
+            try { recognition.start(); talkButton.classList.add("listening"); avatarContainer.classList.add("listening"); avatarContainer.classList.remove("speaking"); statusMessage.textContent = "Listening..."; console.log("Recognition started via button click."); } catch (error) { console.error(">>> Error starting recognition via button:", error); statusMessage.textContent = "Error starting mic."; talkButton.classList.remove("listening"); avatarContainer.classList.remove("listening"); }
+        });
+        console.log(">>> Talk button listener attached.");
+    } else { console.error(">>> Talk button element not found!"); }
+
+
+    // --- 7. Fetch TEXT Response from Backend ---
+    async function sendToBackend(message, visualContext) {
+        console.log(">>> sendToBackend STARTING (Browser Speech). Message:", message, "Context:", visualContext);
+        statusMessage.textContent = "Thinking...";
+        avatarContainer.classList.remove("listening");
+        talkButton.classList.remove("listening");
+
         currentFetchAbortController = new AbortController();
         const signal = currentFetchAbortController.signal;
 
         try {
-             console.log("Fetching audio stream...");
-            const response = await fetch("/chat", { 
-                method: "POST", 
-                headers: { "Content-Type": "application/json" }, 
-                body: JSON.stringify({ message: message }), 
-                 signal: signal 
-            });
-
-            if (!response.ok) {
-                 let errorMsg = `Server error: ${response.status} ${response.statusText}`;
-                 try {
-                      const errorData = await response.json();
-                      errorMsg = errorData.error || errorMsg;
-                 } catch (e) { /* Ignore */ }
-                 throw new Error(errorMsg);
-            }
-             if (!response.body) {
-                 throw new Error("Response body is null");
-             }
-
-            const reader = response.body.getReader();
-            console.log("Got stream reader");
-
-             while (true) {
-                 const { done, value } = await reader.read();
-                 if (done) {
-                      console.log("Fetch stream finished.");
-                      streamEnded = true; 
-                      processQueue(); // Process any remaining chunks and end MediaSource
-                      break;
-                 }
-                
-                audioQueue.push(value);
-                console.log("Received chunk, size:", value.byteLength, "Queue size:", audioQueue.length);
-                processQueue(); // Try to append and play
-            }
-            
+            console.log(">>> Preparing to fetch /chat (expecting JSON)...");
+            const response = await fetch("/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: message, visualContext: visualContext }), signal: signal });
+            console.log(`>>> Fetch response status: ${response.status}`);
+            const contentType = response.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) { const responseText = await response.text(); console.error(">>> Server did not send JSON. Response text:", responseText); throw new Error(`Server error: ${response.status} (Non-JSON response)`); }
+             const data = await response.json();
+            if (!response.ok) { const errorMsg = data.error || `Server error: ${response.status}`; console.error(">>> Fetch failed:", errorMsg); throw new Error(errorMsg); }
+            if (data.response) { const botResponseText = data.response; console.log(">>> Received text response:", botResponseText); speak(botResponseText); }
+            else { console.error(">>> JSON response missing 'response' field:", data); throw new Error("Received invalid response from server."); }
         } catch (error) {
-             if (error.name === 'AbortError') {
-                 console.log("Fetch aborted by user.");
-                 statusMessage.textContent = "Stopped."; // Or keep "Tap Zara..."
-                 handleAudioEnded(); // Reset state properly
-             } else {
-                 console.error("Error fetching or processing stream:", error); 
-                 statusMessage.textContent = error.message || "Error connecting to the brain."; 
-                 handleAudioError(error); // Trigger audio error handling
-             }
+             if (error.name === 'AbortError') { console.log(">>> Fetch aborted by user."); statusMessage.textContent = "Stopped."; }
+             else { console.error(">>> Error fetching or processing response:", error); statusMessage.textContent = error.message || "Error connecting to the brain."; }
+              isSpeaking = false; avatarContainer.classList.remove("speaking");
         } finally {
-            currentFetchAbortController = null; // Clear controller when done/aborted
+            currentFetchAbortController = null;
+             console.log(">>> Fetch process ended (finally block).");
         }
     }
 
-    // --- Initial setup ---
-    statusMessage.textContent = "Tap Zara to start speaking."; // Set initial text
+    // --- 8. Initial Status ---
+    statusMessage.textContent = "Activate Vision to enable interaction.";
+    talkButton.disabled = true;
+    console.log(">>> Script initialization finished.");
 
 }); // <-- End of DOMContentLoaded

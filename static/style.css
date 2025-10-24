@@ -20,41 +20,36 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center; /* Center content vertically */
+    justify-content: space-around; /* Space elements out */
     width: 95%;
-    height: 98%; /* Use almost full height */
-    max-width: 700px; /* Allow wider on large screens */
+    height: 98%;
+    max-width: 600px;
     position: relative;
     box-sizing: border-box;
-    padding: 5px; /* Minimal padding */
+    padding: 10px;
 }
 
-/* Avatar Container - Larger, Clickable Area */
+/* Avatar Container */
 .avatar-container {
-    /* Significantly larger size using viewport units */
-    width: clamp(320px, 75vw, 550px); /* Responsive: min 320, 75% width, max 550 */
+    width: clamp(320px, 70vw, 500px); /* Slightly adjusted max size */
     height: auto;
-    aspect-ratio: 1 / 1.1; /* Maintain aspect ratio */
+    aspect-ratio: 1 / 1.1;
     position: relative;
     display: flex;
     justify-content: center;
     align-items: center;
     overflow: hidden;
-    cursor: pointer;
-    margin-bottom: 5px; /* Reduce space between avatar and text */
-    flex-grow: 1; /* Allow container to take up available space */
-    max-height: 80vh; /* Limit height to 80% of viewport */
+    cursor: default; /* Not clickable */
+    margin-bottom: 0; /* Reduced space */
+    flex-grow: 1;
+    max-height: 70vh; /* Adjusted max height */
 
-
-    /* Float Animation */
     animation: float 7s ease-in-out infinite;
-
-    /* Fading Mask - starts higher up */
     -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 95%);
     mask-image: linear-gradient(to bottom, black 70%, transparent 95%);
 }
 
-/* Avatar Image - Floating Hologram */
+/* Avatar Image */
 .avatar-container img {
     display: block;
     max-width: 100%;
@@ -62,40 +57,114 @@ body {
     height: auto;
     width: auto;
     object-fit: contain;
-
-    /* Hologram Effect */
     opacity: 0.8;
-    filter: drop-shadow(0 0 25px rgba(130, 190, 255, 0.7)) /* More diffuse blue glow */
-            drop-shadow(0 0 10px rgba(180, 220, 255, 0.6)); /* Softer inner glow */
-
+    filter: drop-shadow(0 0 25px rgba(130, 190, 255, 0.7))
+            drop-shadow(0 0 10px rgba(180, 220, 255, 0.6));
     transition: filter 0.6s ease-out, opacity 0.6s ease-out;
-
-    /* Blink Animation */
+    /* Base animation (blink) applied here */
     animation: blink-image 6s infinite ease-in-out 1s;
 }
 
-/* Status Text - Positioned Below Avatar */
+/* Camera Button Style */
+.camera-button {
+    background-color: rgba(0, 0, 0, 0.3);
+    color: #b0d0ff;
+    border: 1px solid #b0d0ff;
+    border-radius: 20px;
+    padding: 8px 18px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: 5px; /* Space below avatar */
+    margin-bottom: 5px; /* Space above status */
+    flex-shrink: 0;
+}
+.camera-button:hover {
+    background-color: rgba(70, 130, 180, 0.5);
+    border-color: #fff;
+    color: #fff;
+}
+.camera-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.camera-button.active { /* Style when camera is ON */
+    background-color: rgba(0, 200, 100, 0.4);
+    border-color: #50ffb0;
+    color: #e0ffe0;
+}
+
+/* Status Text */
 .status-message {
-    font-size: clamp(18px, 3vw, 20px); /* Responsive font size */
+    font-size: clamp(16px, 3vw, 18px); /* Slightly smaller max size */
     color: #b0d0ff;
     text-align: center;
     height: auto;
     line-height: 1.4;
     text-shadow: 0 0 8px rgba(130, 190, 255, 0.6);
-    padding: 5px 15px; /* Add padding */
+    padding: 0 15px; /* Keep horizontal padding */
     position: relative;
     z-index: 2;
-    margin-top: 0; /* Let flexbox handle spacing */
-    margin-bottom: 15px; /* Space before potential (removed) button area */
-    flex-shrink: 0; /* Prevent text from shrinking */
+    margin-top: 5px; /* Reduced space */
+    margin-bottom: 15px;
+    flex-shrink: 0;
+}
+
+/* Talk Button */
+.talk-button {
+    width: clamp(75px, 16vw, 95px); /* Responsive size */
+    height: clamp(75px, 16vw, 95px);
+    border-radius: 50%;
+    border: 1px solid rgba(130, 190, 255, 0.3);
+    cursor: pointer;
+    background: radial-gradient(circle, rgba(70, 130, 180, 0.8) 0%, rgba(30, 70, 120, 0.7) 100%);
+    box-shadow: 0 0 25px rgba(70, 130, 180, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.3s ease-in-out;
+    position: relative;
+    z-index: 2;
+    margin-bottom: 2vh;
+    flex-shrink: 0;
+}
+.talk-button:disabled { /* Style for disabled mic button */
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: #555;
+    box-shadow: none;
+}
+.talk-button::before { /* Mic Icon */
+    content: '';
+    width: 40%;
+    height: 40%;
+    background-color: rgba(255, 255, 255, 0.9);
+    mask-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14q-1.25 0-2.125-.875T9 11V5q0-1.25.875-2.125T12 2q1.25 0 2.125.875T15 5v6q0 1.25-.875 2.125T12 14Zm-1 7v-3.075q-2.6-.3-4.3-2.325T5 11h2q0 2.075 1.463 3.538T12 16q2.075 0 3.538-1.463T17 11h2q0 2.6-1.7 4.625T13 17.925V21h-2Z"/></svg>');
+    mask-size: contain;
+    mask-repeat: no-repeat;
+    mask-position: center;
+    transition: background-color 0.3s ease-in-out;
+}
+.talk-button:hover:not(:disabled) { /* Only apply hover if not disabled */
+    transform: scale(1.1);
+    box-shadow: 0 0 35px rgba(100, 160, 220, 0.7);
+    background: radial-gradient(circle, rgba(90, 150, 200, 0.9) 0%, rgba(50, 90, 140, 0.8) 100%);
+}
+.talk-button.listening {
+    background: radial-gradient(circle, rgba(230, 80, 80, 0.9) 0%, rgba(180, 40, 40, 0.8) 100%); /* Red gradient */
+    box-shadow: 0 0 25px 10px rgba(230, 80, 80, 0.6);
+    animation: pulse-button 1.2s infinite ease-in-out;
+}
+.talk-button.listening::before {
+    background-color: #fff; /* Bright white mic icon */
 }
 
 
-/* --- Keyframes (Float, Blink) --- */
+/* --- Keyframes --- */
 
 @keyframes float {
     0% { transform: translateY(0px); }
-    50% { transform: translateY(-15px); } /* Keep float */
+    50% { transform: translateY(-15px); }
     100% { transform: translateY(0px); }
 }
 
@@ -104,24 +173,68 @@ body {
     94%, 98% { opacity: 0.4; }
 }
 
+@keyframes pulse-button {
+    0% { transform: scale(1); box-shadow: 0 0 25px 10px rgba(230, 80, 80, 0.6); }
+    50% { transform: scale(1.12); box-shadow: 0 0 35px 15px rgba(230, 80, 80, 0.8); }
+    100% { transform: scale(1); box-shadow: 0 0 25px 10px rgba(230, 80, 80, 0.6); }
+}
 
-/* --- Avatar States (Glowing based on image filter) --- */
+/* CORRECTED Keyframes for pulsing drop-shadow */
+@keyframes pulse-glow-red-filter {
+    0% {
+        filter: drop-shadow(0 0 35px rgba(255, 100, 100, 0.9))
+                drop-shadow(0 0 15px rgba(255, 130, 130, 0.8));
+        opacity: 0.95;
+    }
+    50% {
+        filter: drop-shadow(0 0 45px rgba(255, 100, 100, 1.0))
+                drop-shadow(0 0 20px rgba(255, 130, 130, 0.9));
+        opacity: 1.0;
+    }
+    100% {
+        filter: drop-shadow(0 0 35px rgba(255, 100, 100, 0.9))
+                drop-shadow(0 0 15px rgba(255, 130, 130, 0.8));
+        opacity: 0.95;
+    }
+}
+
+@keyframes pulse-glow-blue-filter {
+    0% {
+        filter: drop-shadow(0 0 45px rgba(130, 190, 255, 1.0))
+                drop-shadow(0 0 20px rgba(180, 220, 255, 0.9));
+        opacity: 1.0;
+    }
+    50% {
+        filter: drop-shadow(0 0 55px rgba(130, 190, 255, 1.0))
+                drop-shadow(0 0 25px rgba(180, 220, 255, 1.0));
+        opacity: 1.0; /* Keep fully opaque */
+    }
+    100% {
+        filter: drop-shadow(0 0 45px rgba(130, 190, 255, 1.0))
+                drop-shadow(0 0 20px rgba(180, 220, 255, 0.9));
+        opacity: 1.0;
+    }
+}
+
+
+/* --- Avatar States (Glowing AND PULSING based on image filter) --- */
 
 .avatar-container.listening img {
-    filter: drop-shadow(0 0 35px rgba(255, 100, 100, 0.9)) /* Wider Red glow */
-            drop-shadow(0 0 15px rgba(255, 130, 130, 0.8)); /* Softer inner red glow */
+    /* Apply BOTH blink and red pulse animations */
+    animation: blink-image 6s infinite ease-in-out 1s,
+               pulse-glow-red-filter 1.5s infinite ease-in-out;
+    /* Set initial state for filter/opacity matching animation start */
+    filter: drop-shadow(0 0 35px rgba(255, 100, 100, 0.9))
+            drop-shadow(0 0 15px rgba(255, 130, 130, 0.8));
     opacity: 0.95;
-    /* Remove separate pulse animation for simplicity, rely on glow change */
-    animation: blink-image 6s infinite ease-in-out 1s; /* Keep blink */
-
 }
 
 .avatar-container.speaking img {
-    filter: drop-shadow(0 0 45px rgba(130, 190, 255, 1.0)) /* Wider, Brighter blue glow */
-            drop-shadow(0 0 20px rgba(180, 220, 255, 0.9)); /* Brighter inner blue glow */
+    /* Apply BOTH blink and blue pulse animations */
+    animation: blink-image 6s infinite ease-in-out 1s,
+               pulse-glow-blue-filter 1.5s infinite ease-in-out;
+    /* Set initial state for filter/opacity matching animation start */
+    filter: drop-shadow(0 0 45px rgba(130, 190, 255, 1.0))
+            drop-shadow(0 0 20px rgba(180, 220, 255, 0.9));
     opacity: 1.0;
-     /* Remove separate pulse animation for simplicity, rely on glow change */
-     animation: blink-image 6s infinite ease-in-out 1s; /* Keep blink */
 }
-
-/* Removed pulse-glow keyframes */
